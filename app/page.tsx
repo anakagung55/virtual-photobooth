@@ -2,7 +2,6 @@
 
 import React, { useRef, useState, useEffect } from "react";
 import Webcam from "react-webcam";
-import { toPng } from "html-to-image"; // GANTI PARSER: Pake html-to-image
 import { 
   Download, Move, RefreshCw, ArrowRight, 
   Grid3X3, RectangleVertical, LayoutGrid, User, 
@@ -11,106 +10,128 @@ import {
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
-// --- UTILITIES ---
 function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
 }
 
-// --- CONSTANTS ---
+// --- CONFIGURATION ---
+
+// 1. FILTERS (Mapping CSS Class untuk Preview & Canvas String untuk Download)
 const FILTERS = [
-  { name: "Normal", class: "" },
-  { name: "B&W", class: "grayscale contrast-125" },
-  { name: "Sepia", class: "sepia contrast-110" },
-  { name: "Warm", class: "sepia-[.3] contrast-100 brightness-110 saturate-150" },
-  { name: "Cool", class: "hue-rotate-180 sepia-[.2] opacity-90" },
-  { name: "Vintage", class: "contrast-125 sepia-[.4] brightness-90 hue-rotate-[-10deg]" },
+  { name: "Normal", class: "", ctx: "none" },
+  { name: "B&W", class: "grayscale contrast-125", ctx: "grayscale(100%) contrast(125%)" },
+  { name: "Sepia", class: "sepia contrast-110", ctx: "sepia(100%) contrast(110%)" },
+  { name: "Warm", class: "sepia-[.3] contrast-100 brightness-110 saturate-150", ctx: "sepia(30%) contrast(100%) brightness(110%) saturate(150%)" },
+  { name: "Cool", class: "hue-rotate-180 sepia-[.2] opacity-90", ctx: "hue-rotate(180deg) sepia(20%) opacity(90%)" },
+  { name: "Vintage", class: "contrast-125 sepia-[.4] brightness-90 hue-rotate-[-10deg]", ctx: "contrast(125%) sepia(40%) brightness(90%) hue-rotate(-10deg)" },
 ];
 
+// 2. LAYOUTS
 const LAYOUTS = [
   { 
-    id: "strip-4", 
-    name: "Classic Strip", 
-    slots: 4, 
-    cols: 1, 
-    slotAspect: "aspect-[4/3]", 
-    gridClass: "grid-cols-1 gap-4", 
-    widthClass: "w-[300px]", 
+    id: "strip-4", name: "Classic Strip", slots: 4, cols: 1, 
+    slotAspect: "aspect-[4/3]", gridClass: "grid-cols-1 gap-4", widthClass: "w-[300px]", 
     icon: <RectangleVertical /> 
   },
   { 
-    id: "wide-3", 
-    name: "Wide Trio", 
-    slots: 3, 
-    cols: 1, 
-    slotAspect: "aspect-video", 
-    gridClass: "grid-cols-1 gap-4", 
-    widthClass: "w-[500px]", 
+    id: "wide-3", name: "Wide Trio", slots: 3, cols: 1, 
+    slotAspect: "aspect-video", gridClass: "grid-cols-1 gap-4", widthClass: "w-[500px]", 
     icon: <ImageIcon />
   },
   { 
-    id: "grid-4", 
-    name: "Quad Grid", 
-    slots: 4, 
-    cols: 2, 
-    slotAspect: "aspect-[4/3]", 
-    gridClass: "grid-cols-2 gap-4",
-    widthClass: "w-[500px]", 
+    id: "grid-4", name: "Quad Grid", slots: 4, cols: 2, 
+    slotAspect: "aspect-[4/3]", gridClass: "grid-cols-2 gap-4", widthClass: "w-[500px]", 
     icon: <LayoutGrid />
   },
   { 
-    id: "grid-6", 
-    name: "Six Pack", 
-    slots: 6, 
-    cols: 2, 
-    slotAspect: "aspect-square", 
-    gridClass: "grid-cols-2 gap-3",
-    widthClass: "w-[480px]",
+    id: "grid-6", name: "Six Pack", slots: 6, cols: 2, 
+    slotAspect: "aspect-square", gridClass: "grid-cols-2 gap-3", widthClass: "w-[480px]", 
     icon: <Grid3X3 />
   },
   { 
-    id: "solo", 
-    name: "Solo Portrait", 
-    slots: 1, 
-    cols: 1, 
-    slotAspect: "aspect-[3/4]", 
-    gridClass: "grid-cols-1",
-    widthClass: "w-[360px]",
+    id: "solo", name: "Solo Portrait", slots: 1, cols: 1, 
+    slotAspect: "aspect-[3/4]", gridClass: "grid-cols-1", widthClass: "w-[360px]", 
     icon: <User />
   },
 ];
 
-// BALIK PAKE CLASS TAILWIND (Udah aman pake library baru)
+// 3. FRAMES
 const FRAMES = [
-  { id: "white", color: "bg-white", text: "text-black", border: "border-zinc-200" },
-  { id: "black", color: "bg-black", text: "text-white", border: "border-zinc-800" },
-  { id: "cream", color: "bg-[#F5F5DC]", text: "text-[#5C4033]", border: "border-[#E8E8C8]" },
-  { id: "pink", color: "bg-pink-300", text: "text-pink-900", border: "border-pink-400" },
-  { id: "blue", color: "bg-blue-300", text: "text-blue-900", border: "border-blue-400" },
-  { id: "gradient", color: "bg-gradient-to-br from-violet-500 to-fuchsia-500", text: "text-white", border: "border-white/20" },
+  { id: "white", hex: "#ffffff", textHex: "#000000", borderHex: "#e4e4e7" },
+  { id: "black", hex: "#000000", textHex: "#ffffff", borderHex: "#27272a" },
+  { id: "cream", hex: "#F5F5DC", textHex: "#5C4033", borderHex: "#E8E8C8" },
+  { id: "pink", hex: "#fbcfe8", textHex: "#831843", borderHex: "#f9a8d4" },
+  { id: "blue", hex: "#bfdbfe", textHex: "#1e3a8a", borderHex: "#93c5fd" },
+  { id: "gradient", bgStyle: "linear-gradient(to bottom right, #8b5cf6, #d946ef)", hex: "#8b5cf6", textHex: "#ffffff", borderHex: "rgba(255,255,255,0.2)" },
 ];
 
 const TIMERS = [3, 5, 10];
 
-const VideoMirror = ({ stream, className, style }: { stream: MediaStream | null, className?: string, style?: React.CSSProperties }) => {
+// --- HELPER: Draw Image with Object-Fit Cover ---
+// Ini algoritma matematika biar gambar ga gepeng pas di-canvas
+function drawImageProp(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number, offsetX = 0.5, offsetY = 0.5) {
+  if (arguments.length === 2) {
+      x = y = 0;
+      w = ctx.canvas.width;
+      h = ctx.canvas.height;
+  }
+
+  // Keep bounds [0.0, 1.0]
+  if (offsetX < 0) offsetX = 0;
+  if (offsetY < 0) offsetY = 0;
+  if (offsetX > 1) offsetX = 1;
+  if (offsetY > 1) offsetY = 1;
+
+  var iw = img.width,
+      ih = img.height,
+      r = Math.min(w / iw, h / ih),
+      nw = iw * r,   // new prop. width
+      nh = ih * r,   // new prop. height
+      cx, cy, cw, ch, ar = 1;
+
+  // Decide which gap to fill    
+  if (nw < w) ar = w / nw;                             
+  if (Math.abs(ar - 1) < 1e-14 && nh < h) ar = h / nh;  // updated
+  nw *= ar;
+  nh *= ar;
+
+  // Calc source rectangle
+  cw = iw / (nw / w);
+  ch = ih / (nh / h);
+  cx = (iw - cw) * offsetX;
+  cy = (ih - ch) * offsetY;
+
+  // Make sure source rectangle is valid
+  if (cx < 0) cx = 0;
+  if (cy < 0) cy = 0;
+  if (cw > iw) cw = iw;
+  if (ch > ih) ch = ih;
+
+  ctx.drawImage(img, cx, cy, cw, ch,  x, y, w, h);
+}
+
+// --- COMPONENT: Video Mirror ---
+const VideoMirror = ({ stream, style }: { stream: MediaStream | null, style?: React.CSSProperties }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     if (videoRef.current && stream) videoRef.current.srcObject = stream;
   }, [stream]);
-  return <video ref={videoRef} autoPlay playsInline muted className={cn("w-full h-full object-cover transform scale-x-[-1]", className)} style={style} />;
+  return <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]" style={style} />;
 };
 
 export default function Photobooth() {
   const [phase, setPhase] = useState<"SETUP" | "CAPTURE" | "EDIT">("SETUP");
   const webcamRef = useRef<Webcam>(null);
-  const frameRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   
-  // State
+  // State Config
   const [selectedLayout, setSelectedLayout] = useState(LAYOUTS[2]); 
   const [selectedFrame, setSelectedFrame] = useState(FRAMES[0]); 
   const [timerDuration, setTimerDuration] = useState(3); 
   const [caption, setCaption] = useState(""); 
   const [brightness, setBrightness] = useState(100); 
+
+  // State Data
   const [photos, setPhotos] = useState<string[]>([]);
   const [globalFilter, setGlobalFilter] = useState(FILTERS[0]);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -176,50 +197,147 @@ export default function Photobooth() {
     setDraggedIdx(null);
   };
 
-  // --- DOWNLOAD BARU (PAKE HTML-TO-IMAGE) ---
+  // --- MANUAL CANVAS RENDERER (THE FIX) ---
   const handleDownload = async () => {
-    if (!frameRef.current) return;
-    
     try {
       setIsDownloading(true);
-      
-      // Tunggu sebentar biar render UI tuntas
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 100)); // UI Feedback delay
 
-      // Konversi ke PNG
-      const dataUrl = await toPng(frameRef.current, { 
-        cacheBust: true, 
-        pixelRatio: 3, // HD Quality
-        backgroundColor: '#ffffff' // Hindari transparan
-      });
+      // 1. Setup Canvas Ukuran HD
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      // Konfigurasi Ukuran (Scale up biar HD)
+      const scale = 2; 
+      const padding = 24 * scale;
+      const gap = 16 * scale;
+      const headerHeight = 60 * scale;
+      const footerHeight = 80 * scale;
       
+      // Lebar total canvas berdasarkan layout
+      const baseWidth = selectedLayout.id.includes("strip") ? 300 : selectedLayout.id.includes("solo") ? 360 : 500;
+      canvas.width = baseWidth * scale;
+
+      // Hitung Grid
+      const cols = selectedLayout.cols;
+      const rows = Math.ceil(selectedLayout.slots / cols);
+      
+      // Hitung Ukuran Slot Foto
+      const slotWidth = (canvas.width - (padding * 2) - ((cols - 1) * gap)) / cols;
+      let slotHeight = slotWidth * 0.75; // Default 4:3
+      if (selectedLayout.slotAspect.includes("square")) slotHeight = slotWidth;
+      if (selectedLayout.slotAspect.includes("video")) slotHeight = slotWidth * (9/16);
+      if (selectedLayout.slotAspect.includes("aspect-[3/4]")) slotHeight = slotWidth * (4/3);
+
+      // Tinggi total canvas
+      const contentHeight = (rows * slotHeight) + ((rows - 1) * gap);
+      canvas.height = padding + headerHeight + contentHeight + footerHeight;
+
+      // 2. Draw Background
+      ctx.fillStyle = selectedFrame.hex;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Handle Gradient khusus
+      if(selectedFrame.id === 'gradient') {
+        const grd = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        grd.addColorStop(0, "#8b5cf6");
+        grd.addColorStop(1, "#d946ef");
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      // 3. Draw Header Text
+      if (caption) {
+        ctx.fillStyle = selectedFrame.textHex;
+        ctx.font = `bold ${18 * scale}px monospace`;
+        ctx.textAlign = "center";
+        ctx.fillText(caption.toUpperCase(), canvas.width / 2, padding + (headerHeight/2));
+      }
+
+      // 4. Draw Photos
+      // Load semua gambar dulu
+      const loadedImages = await Promise.all(photos.map(src => {
+        return new Promise<HTMLImageElement>((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.src = src;
+        });
+      }));
+
+      // Apply Filter & Brightness
+      ctx.filter = `${globalFilter.ctx} brightness(${brightness}%)`;
+
+      // Loop gambar dan gambar ke canvas
+      loadedImages.forEach((img, idx) => {
+        const col = idx % cols;
+        const row = Math.floor(idx / cols);
+        
+        const x = padding + (col * (slotWidth + gap));
+        const y = padding + headerHeight + (row * (slotHeight + gap));
+
+        // Draw background slot (putih/abu)
+        ctx.fillStyle = "#f4f4f5";
+        ctx.fillRect(x, y, slotWidth, slotHeight);
+
+        // Draw Image dengan proporsi cover (biar ga gepeng)
+        drawImageProp(ctx, img, x, y, slotWidth, slotHeight);
+      });
+
+      // Reset filter buat text footer
+      ctx.filter = "none";
+
+      // 5. Draw Footer
+      const footerY = canvas.height - (padding);
+      ctx.fillStyle = selectedFrame.textHex;
+      ctx.globalAlpha = 0.6;
+      ctx.font = `${10 * scale}px monospace`;
+      ctx.textAlign = "left";
+      
+      // Date
+      const dateStr = new Date().toLocaleDateString();
+      const timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      ctx.fillText("SNAP.BOOTH", padding, footerY - (15 * scale));
+      ctx.fillText(`${dateStr} • ${timeStr}`, padding, footerY);
+
+      // ID
+      ctx.textAlign = "right";
+      const idStr = "#" + Math.random().toString(36).substr(2, 4).toUpperCase();
+      ctx.fillText(idStr, canvas.width - padding, footerY);
+
+      // 6. Save File
+      const dataUrl = canvas.toDataURL("image/png");
       const link = document.createElement("a");
       link.download = `snapbooth-${Date.now()}.png`;
       link.href = dataUrl;
       link.click();
-      
+
     } catch (err) {
-      console.error("Gagal download:", err);
-      alert("Gagal menyimpan gambar. Coba refresh atau gunakan browser lain.");
+      console.error("Canvas error:", err);
+      alert("Gagal render canvas.");
     } finally {
       setIsDownloading(false);
     }
   };
 
+  // --- RENDER HELPERS ---
   const ResultFrame = ({ isPreview = false }) => (
     <div 
-      ref={!isPreview ? frameRef : null}
+      style={{
+        backgroundColor: selectedFrame.hex,
+        backgroundImage: selectedFrame.bgStyle || "none",
+        color: selectedFrame.textHex,
+        borderColor: selectedFrame.borderHex
+      }}
       className={cn(
-        "relative p-6 shadow-2xl flex flex-col gap-4 mx-auto border-[12px] h-fit bg-white", 
-        selectedFrame.color,
-        selectedFrame.border,
+        "relative p-6 flex flex-col gap-4 mx-auto border-[12px] h-fit shadow-2xl transition-all", 
         selectedLayout.widthClass,
         isPreview ? "scale-90 origin-top" : "scale-100"
       )}
     >
       <div className="text-center min-h-[24px] flex items-end justify-center">
           {caption && (
-            <h3 className={cn("font-bold text-xl tracking-tight uppercase opacity-90 break-words leading-tight font-mono", selectedFrame.text)}>
+            <h3 className="font-bold text-xl tracking-tight uppercase opacity-90 break-words leading-tight font-mono">
               {caption}
             </h3>
           )}
@@ -235,8 +353,9 @@ export default function Photobooth() {
               onDragStart={(e) => !isPreview && handleDragStart(e, idx)}
               onDrop={(e) => !isPreview && handleDrop(e, idx)}
               onDragOver={(e) => !isPreview && e.preventDefault()}
+              style={{ backgroundColor: '#f4f4f5' }}
               className={cn(
-                "relative overflow-hidden bg-zinc-100 flex items-center justify-center shadow-sm group rounded-sm",
+                "relative overflow-hidden flex items-center justify-center shadow-sm group rounded-sm",
                 selectedLayout.slotAspect
               )}
             >
@@ -255,14 +374,17 @@ export default function Photobooth() {
                   )}
                 </>
               ) : (
-                <div className="text-zinc-300 text-xs font-mono">WAITING...</div>
+                <div style={{ color: '#d4d4d8' }} className="text-xs font-mono">WAITING...</div>
               )}
             </div>
           );
         })}
       </div>
 
-      <div className={cn("mt-auto pt-4 flex justify-between items-end opacity-60 border-t border-black/10", selectedFrame.text)}>
+      <div 
+        className="mt-auto pt-4 flex justify-between items-end opacity-60 border-t"
+        style={{ borderColor: selectedFrame.borderHex }}
+      >
         <div className="text-[10px] font-mono tracking-widest uppercase leading-tight">
           <span className="font-bold">SNAP.BOOTH</span> <br/>
           {new Date().toLocaleDateString()} • {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
@@ -430,7 +552,12 @@ export default function Photobooth() {
                 <h3 className="text-xl font-bold mb-4">Frame Color</h3>
                 <div className="flex flex-wrap gap-3">
                   {FRAMES.map((f) => (
-                    <button key={f.id} onClick={() => setSelectedFrame(f)} className={cn("w-10 h-10 rounded-full border-2 transition-transform", f.color, selectedFrame.id === f.id ? "border-white scale-110 ring-2 ring-pink-500" : "border-transparent opacity-70")} />
+                    <button 
+                      key={f.id} 
+                      onClick={() => setSelectedFrame(f)} 
+                      className={cn("w-10 h-10 rounded-full border-2 transition-transform shadow-sm", selectedFrame.id === f.id ? "border-white scale-110 ring-2 ring-pink-500" : "border-transparent opacity-70")} 
+                      style={{ background: f.bgStyle || f.hex }}
+                    />
                   ))}
                 </div>
               </div>
